@@ -50,8 +50,8 @@ We've created a GitLab repository that you will use to implement SimpleDB. This 
 
 The first thing you'll need to do is set up a SSH key to allow communication with GitLab:
 
-1.  If you don't already have one, generate a new SSH key. See [these instructions](http://doc.gitlab.com/ce/ssh/README.html) for details on how to do this.
-2.  Visit the [GitLab SSH key management page](https://gitlab.cs.washington.edu/profile/keys). You'll need to log in using your CSE account.
+1.  If you don't already have one, generate a new SSH key. See [these instructions](https://docs.gitlab.com/ee/user/ssh.html#generate-an-ssh-key-pair) for details on how to do this.
+2.  Visit the [GitLab SSH key management page](https://gitlab.cs.washington.edu/-/profile/keys). You'll need to log in using your CSE account.
 3.  Click "Add SSH Key" and paste in your **public** key into the text area.
 
 While you're logged into the GitLab website, browse around to see which projects you have access to. You should have access to `simple-db-[your username]`. Spend a few minutes getting familiar with the directory layout and file structure.
