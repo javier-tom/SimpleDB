@@ -5,7 +5,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * The Catalog keeps track of all available tables in the database and their
@@ -18,12 +17,22 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public class Catalog {
 
+    // Fields
+    Map<String, Integer> name_to_id;
+    Map<Integer, DbFile> id_to_file;
+    Map<Integer, String> id_to_table_name;
+    Map<Integer, String> id_to_pkey;
     /**
      * Constructor.
      * Creates a new, empty catalog.
      */
     public Catalog() {
         // some code goes here
+        // just create a mapping for each item
+        this.name_to_id = new HashMap<>();
+        this.id_to_file = new HashMap<>();
+        this.id_to_table_name = new HashMap<>();
+        this.id_to_pkey = new HashMap<>();
     }
 
     /**
@@ -37,6 +46,11 @@ public class Catalog {
      */
     public void addTable(DbFile file, String name, String pkeyField) {
         // some code goes here
+        int id = file.getId();
+        this.name_to_id.put(name, id);
+        this.id_to_file.put(id, file);
+        this.id_to_table_name.put(id, name);
+        this.id_to_pkey.put(id, pkeyField);
     }
 
     public void addTable(DbFile file, String name) {
@@ -60,7 +74,10 @@ public class Catalog {
      */
     public int getTableId(String name) throws NoSuchElementException {
         // some code goes here
-        return 0;
+        if (this.name_to_id.containsKey(name)) {
+            return this.name_to_id.get(name);
+        }
+        throw new NoSuchElementException();
     }
 
     /**
@@ -71,7 +88,10 @@ public class Catalog {
      */
     public TupleDesc getTupleDesc(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if (this.id_to_file.containsKey(tableid)) {
+            return this.id_to_file.get(tableid).getTupleDesc();
+        }
+        throw new NoSuchElementException();
     }
 
     /**
@@ -82,27 +102,37 @@ public class Catalog {
      */
     public DbFile getDatabaseFile(int tableid) throws NoSuchElementException {
         // some code goes here
-        return null;
+        if (this.id_to_file.containsKey(tableid)) {
+            return this.id_to_file.get(tableid);
+        }
+        throw new NoSuchElementException();
     }
 
     public String getPrimaryKey(int tableid) {
         // some code goes here
-        return null;
+        // what if tableid does not exist?
+        return this.id_to_pkey.get(tableid);
     }
 
     public Iterator<Integer> tableIdIterator() {
         // some code goes here
-        return null;
+        Set<Integer> id_set = this.id_to_file.keySet();
+        return id_set.iterator();
     }
 
     public String getTableName(int id) {
         // some code goes here
-        return null;
+        // what if id is not a valid id?
+        return this.id_to_table_name.get(id);
     }
     
     /** Delete all tables from the catalog */
     public void clear() {
         // some code goes here
+        this.name_to_id.clear();
+        this.id_to_file.clear();
+        this.id_to_table_name.clear();
+        this.id_to_pkey.clear();
     }
     
     /**

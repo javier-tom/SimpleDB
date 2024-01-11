@@ -48,8 +48,8 @@ public class TupleDesc implements Serializable {
     private static final long serialVersionUID = 1L;
 
     // added fields
-    Type[] typeArr;
-    String[] fieldArr;
+//    Type[] typeArr;
+//    String[] fieldArr;
     List<TDItem> tdList = new ArrayList<>();
 
     // Helper Methods
@@ -83,8 +83,8 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr, String[] fieldAr) {
         // some code goes here
-        this.typeArr = typeAr;
-        this.fieldArr = fieldAr;
+//        this.typeArr = typeAr;
+//        this.fieldArr = fieldAr;
         createTDList(typeAr, fieldAr);
     }
 
@@ -98,6 +98,7 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr) {
         // some code goes here
+        // pass a list of null values for column names
         this(typeAr, new String[typeAr.length]);
     }
 
@@ -120,7 +121,8 @@ public class TupleDesc implements Serializable {
      */
     public String getFieldName(int i) throws NoSuchElementException {
         // some code goes here
-        if (numFields() <= i) {
+        // check for index out of bound
+        if (numFields() <= i || i < 0) {
             throw new NoSuchElementException();
         }
         return this.tdList.get(i).fieldName;
@@ -138,7 +140,8 @@ public class TupleDesc implements Serializable {
      */
     public Type getFieldType(int i) throws NoSuchElementException {
         // some code goes here
-        if (numFields() <= i) {
+        // check for index out of bound
+        if (numFields() <= i || i < 0) {
             throw new NoSuchElementException();
         }
         return this.tdList.get(i).fieldType;
@@ -232,7 +235,7 @@ public class TupleDesc implements Serializable {
             return false;
         }
 
-        for (int i = 0; i < numFields(); i++) {
+        for (int i = 0; i < this.numFields(); i++) {
             if (!(this.getFieldType(i).equals(td.getFieldType(i)))) {
                 return false;
             }
@@ -259,9 +262,13 @@ public class TupleDesc implements Serializable {
         Iterator<TDItem> iterator = iterator();
         while (iterator.hasNext()) {
             TDItem tdItem = iterator.next();
+            // what does format does not matter?
+            // does that mean we can do 'fieldName(fieldType)'
+            // if so we can just append tdItem.toString()
             sb.append(tdItem.fieldType + "(" + tdItem.fieldName + "),");
         }
 
+        // remove last comma
         sb.deleteCharAt(sb.length() - 1);
         return sb.toString();
     }

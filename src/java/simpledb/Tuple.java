@@ -17,7 +17,6 @@ public class Tuple implements Serializable {
     RecordId recordId;
     // if we want to be precise, we need a list(array) of size tupleDesc.size()
     // this will ensure we only access indices in range
-    // Map<Integer, Field> tupleFields = new HashMap<>();
     List<Field> fieldList;
 
     /**
@@ -71,7 +70,8 @@ public class Tuple implements Serializable {
      */
     public void setField(int i, Field f) {
         // some code goes here
-        // this.tupleFields.put(i, f);
+        // check of out of bound index
+        if (this.tupleDesc.numFields() <= i || i < 0) return;
         this.fieldList.add(i, f);
     }
 
@@ -83,10 +83,8 @@ public class Tuple implements Serializable {
      */
     public Field getField(int i) {
         // some code goes here
-//        if (this.tupleFields.containsKey(i)) {
-//            return this.tupleFields.get(i);
-//        }
-//        return null;
+        // do we have to check for index out of bound?
+        // invalid index should not be returning null but rather be throwing an exception
         return this.fieldList.get(i);
     }
 
@@ -104,6 +102,7 @@ public class Tuple implements Serializable {
         StringBuilder sb = new StringBuilder();
         Iterator<Field> iterator = fields();
         while (iterator.hasNext()) {
+            // TODO: should we check for null values?
             sb.append(iterator.next().toString() + " ");
         }
 
