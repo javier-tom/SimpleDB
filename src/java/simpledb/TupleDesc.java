@@ -48,27 +48,9 @@ public class TupleDesc implements Serializable {
     private static final long serialVersionUID = 1L;
 
     // added fields
-//    Type[] typeArr;
-//    String[] fieldArr;
-    List<TDItem> tdList = new ArrayList<>();
-
-    // Helper Methods
-
-    /**
-     * Creates a TDItem list for arguments passed into the constructor
-     * @param typeAr
-     *          array specifying the number of and types of fields in this
-     *          TupleDesc. It must contain at least one entry.
-     * @param fieldAr
-     *          array specifying the names of the fields. Note that names may
-     *          be null.
-     */
-    private void createTDList(Type[] typeAr, String[] fieldAr) {
-        for (int i = 0; i < typeAr.length; i++) {
-            TDItem tdItem = new TDItem(typeAr[i], fieldAr[i]);
-            tdList.add(tdItem);
-        }
-    }
+    private final Type[] typeArr;
+    private final String[] fieldArr;
+    private final List<TDItem> tdList = new ArrayList<>();
 
     /**
      * Create a new TupleDesc with typeAr.length fields with fields of the
@@ -83,8 +65,8 @@ public class TupleDesc implements Serializable {
      */
     public TupleDesc(Type[] typeAr, String[] fieldAr) {
         // some code goes here
-//        this.typeArr = typeAr;
-//        this.fieldArr = fieldAr;
+        this.typeArr = typeAr;
+        this.fieldArr = fieldAr;
         createTDList(typeAr, fieldAr);
     }
 
@@ -271,5 +253,33 @@ public class TupleDesc implements Serializable {
         // remove last comma
         sb.deleteCharAt(sb.length() - 1);
         return sb.toString();
+    }
+
+    ///////////////////////////////////////////////////////////////
+    //                     Helper Methods                        //
+    ///////////////////////////////////////////////////////////////
+
+    /**
+     * Creates a TDItem list for arguments passed into the constructor
+     * @param typeAr
+     *          array specifying the number of and types of fields in this
+     *          TupleDesc. It must contain at least one entry.
+     * @param fieldAr
+     *          array specifying the names of the fields. Note that names may
+     *          be null.
+     */
+    private void createTDList(Type[] typeAr, String[] fieldAr) {
+        for (int i = 0; i < typeAr.length; i++) {
+            TDItem tdItem = new TDItem(typeAr[i], fieldAr[i]);
+            tdList.add(tdItem);
+        }
+    }
+
+    public Type[] getTypes() {
+        return Arrays.copyOf(this.typeArr, this.typeArr.length);
+    }
+
+    public String[] getFields() {
+        return Arrays.copyOf(this.fieldArr, this.fieldArr.length);
     }
 }
