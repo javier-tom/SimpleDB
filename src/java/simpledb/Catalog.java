@@ -18,10 +18,10 @@ import java.util.*;
 public class Catalog {
 
     // Fields
-    Map<String, Integer> name_to_id;
-    Map<Integer, DbFile> id_to_file;
-    Map<Integer, String> id_to_table_name;
-    Map<Integer, String> id_to_pkey;
+    private final Map<String, Integer> name_to_id;
+    private final Map<Integer, DbFile> id_to_file;
+    private final Map<Integer, String> id_to_table_name;
+    private final Map<Integer, String> id_to_pkey;
     /**
      * Constructor.
      * Creates a new, empty catalog.

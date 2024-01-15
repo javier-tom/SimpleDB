@@ -2,6 +2,7 @@ package simpledb;
 
 import java.io.*;
 
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -26,6 +27,15 @@ public class BufferPool {
     constructor instead. */
     public static final int DEFAULT_PAGES = 50;
 
+    // Fields
+    private int maxNumPages;
+    private int currNumPages;
+    // create list that appends pages to the end.
+    // if doing LFU policy we can remove the head of the list
+    private final List<Page> pageList;
+    // create a mapping for pageId to Page
+    private final Map<PageId, Page> pageMap;
+
     /**
      * Creates a BufferPool that caches up to numPages pages.
      *
@@ -33,6 +43,10 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         // some code goes here
+        this.currNumPages = 0;
+        this.maxNumPages = numPages;
+        this.pageList = new LinkedList<>();
+        this.pageMap = new HashMap<>();
     }
     
     public static int getPageSize() {
@@ -64,10 +78,25 @@ public class BufferPool {
      * @param pid the ID of the requested page
      * @param perm the requested permissions on the page
      */
-    public  Page getPage(TransactionId tid, PageId pid, Permissions perm)
+    public Page getPage(TransactionId tid, PageId pid, Permissions perm)
         throws TransactionAbortedException, DbException {
         // some code goes here
-        return null;
+        if (this.pageMap.containsKey(pid)) {
+            Page page = this.pageMap.get(pid);
+            this.pageList.remove(page);
+            this.pageList.add(page);
+            return page;
+        }
+        // check if we need to evict page
+        if (checkBufferPoolSize())
+            throw new DbException("BufferPool full with no eviction policy");
+        // page is absent, retrieve from disk
+        DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
+        Page page = dbFile.readPage(pid);
+        this.pageMap.put(pid, page);
+        this.pageList.add(page);
+        this.currNumPages += 1;
+        return page;
     }
 
     /**
@@ -201,6 +230,14 @@ public class BufferPool {
     private synchronized  void evictPage() throws DbException {
         // some code goes here
         // not necessary for lab1
+    }
+
+    ///////////////////////////////////////////////////////////////
+    //                     Helper Methods                        //
+    ///////////////////////////////////////////////////////////////
+
+    private boolean checkBufferPoolSize() {
+        return this.currNumPages < this.maxNumPages;
     }
 
 }
