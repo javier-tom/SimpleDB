@@ -3,7 +3,6 @@ package simpledb;
 import java.io.*;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -88,7 +87,7 @@ public class BufferPool {
             return page;
         }
         // check if we need to evict page
-        if (checkBufferPoolSize())
+        if (checkBufferPoolSizeFull())
             throw new DbException("BufferPool full with no eviction policy");
         // page is absent, retrieve from disk
         DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
@@ -236,8 +235,8 @@ public class BufferPool {
     //                     Helper Methods                        //
     ///////////////////////////////////////////////////////////////
 
-    private boolean checkBufferPoolSize() {
-        return this.currNumPages < this.maxNumPages;
+    private boolean checkBufferPoolSizeFull() {
+        return this.currNumPages >= this.maxNumPages;
     }
 
 }

@@ -15,6 +15,12 @@ import java.util.*;
  */
 public class HeapFile implements DbFile {
 
+    // Fields
+    private final File file;
+    private final TupleDesc tupleDesc;
+    private final List<Page> pages;
+    private final int pageId;
+
     /**
      * Constructs a heap file backed by the specified file.
      * 
@@ -24,6 +30,10 @@ public class HeapFile implements DbFile {
      */
     public HeapFile(File f, TupleDesc td) {
         // some code goes here
+        this.file = f;
+        this.tupleDesc = td;
+        this.pages = new ArrayList<>();
+        this.pageId = file.getAbsoluteFile().hashCode();
     }
 
     /**
@@ -33,7 +43,7 @@ public class HeapFile implements DbFile {
      */
     public File getFile() {
         // some code goes here
-        return null;
+        return this.file;
     }
 
     /**
@@ -47,7 +57,7 @@ public class HeapFile implements DbFile {
      */
     public int getId() {
         // some code goes here
-        throw new UnsupportedOperationException("implement this");
+        return this.pageId;
     }
 
     /**
@@ -57,12 +67,34 @@ public class HeapFile implements DbFile {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        throw new UnsupportedOperationException("implement this");
+        return this.tupleDesc;
     }
 
     // see DbFile.java for javadocs
     public Page readPage(PageId pid) {
         // some code goes here
+        // To read a page from disk, you will first need to calculate the correct offset in the file.
+        // Hint: you will need random access to the file in order to read and write pages at arbitrary offsets.
+        // You should not call BufferPool methods when reading a page from disk.
+
+        // create a byte array that will hold data read.
+        int pageSize = BufferPool.getPageSize();
+        byte[] data = new byte[pageSize];
+
+        // create a RandomAccessFile to read file from disk.
+        try {
+            RandomAccessFile randomAccessFile = new RandomAccessFile(this.file, "r");
+            int offset = pid.getPageNumber() * pageSize;
+            // check to make sure we don't try to read more than is available to read.
+            assert (offset + pageSize <= randomAccessFile.length());
+
+            randomAccessFile.seek(offset);
+            randomAccessFile.read(data);
+            randomAccessFile.close();
+            return new HeapPage((HeapPageId) pid, data);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         return null;
     }
 
@@ -77,7 +109,7 @@ public class HeapFile implements DbFile {
      */
     public int numPages() {
         // some code goes here
-        return 0;
+        return (int) Math.ceil((float) this.file.length() / BufferPool.getPageSize());
     }
 
     // see DbFile.java for javadocs
@@ -99,7 +131,7 @@ public class HeapFile implements DbFile {
     // see DbFile.java for javadocs
     public DbFileIterator iterator(TransactionId tid) {
         // some code goes here
-        return null;
+        return new HeapFileIterator(this, tid);
     }
 
 }
