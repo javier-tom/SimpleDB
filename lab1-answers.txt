@@ -1,0 +1,30 @@
+Lab 1 was primarily about implementing the different modules that work together in a database management system.
+
+It was mention in the lab specs that each tuple/row would be its own separate object that would be passed around
+when a parent operator asks for the next tuple in a file. Tuple is the class for this tuple object while TupleDesc
+is the tuple description that holds the information (field type and name) about the tuple.
+
+Catalog works as the global storage for the database. Catalog keeps a record of all the available tables that are
+added to the database and information about their schema.
+
+BufferPool works as the file manager. BufferPool can hold a set number of pages that it can return to HeapFiles ask
+for a page. If a HeapFile is asking for a page that the BufferPool does not have on hand, BufferPool needs to do a
+read from disk using an access method on the heap file, saving the page on its cache for potentially later use and
+returning the contents to the HeapFile did the initial request.
+
+HeapPage is the object that holds the data that is read from disk. HeapPage holds tuple description for the tuples it
+holds along with a header saying how many tuples that pages holds.
+
+HeapFile holds a collection of HeapPages. In lab1 HeapFile is primarily used by the SeqScan to read each tuples on each
+page. HeapFileIterator is the object that iterates through all the tuples. SeqScan recursively calls next to get the next
+available tuple in a file, returning it to project operator.
+
+
+In lab1 I chose to use Java's RandomAccessFile class to read data from disk. I also chose to make a separate class
+HeapFileIterator using the DbFileIterator interface that would handle the logic for reading each tuple from a
+heap file (traversing each page on the heap file).
+
+
+We can add unit tests HeapPage header size and HeapPage getNumTuples().
+
+I did not have any incomplete or missing elements for lab1.

@@ -27,7 +27,7 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     // Fields
-    private int maxNumPages;
+    private final int maxNumPages;
     private int currNumPages;
     // create list that appends pages to the end.
     // if doing LFU policy we can remove the head of the list
