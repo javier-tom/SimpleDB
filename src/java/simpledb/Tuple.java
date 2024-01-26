@@ -13,11 +13,9 @@ public class Tuple implements Serializable {
     private static final long serialVersionUID = 1L;
 
     // Added fields
-    TupleDesc tupleDesc;
-    RecordId recordId;
-    // if we want to be precise, we need a list(array) of size tupleDesc.size()
-    // this will ensure we only access indices in range
-    List<Field> fieldList;
+    private TupleDesc tupleDesc;
+    private RecordId recordId;
+    private List<Field> fieldList;
 
     /**
      * Create a new tuple with the specified schema (type).
@@ -98,7 +96,6 @@ public class Tuple implements Serializable {
      */
     public String toString() {
         // some code goes here
-        //throw new UnsupportedOperationException("Implement this");
         StringBuilder sb = new StringBuilder();
         Iterator<Field> iterator = fields();
         while (iterator.hasNext()) {
