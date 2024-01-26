@@ -1,5 +1,7 @@
 package simpledb;
 
+import org.w3c.dom.ls.LSInput;
+
 import java.util.*;
 
 /**
@@ -8,6 +10,12 @@ import java.util.*;
 public class Filter extends Operator {
 
     private static final long serialVersionUID = 1L;
+    // Fields
+    private final Predicate predicate;
+    private OpIterator child;
+    private TupleDesc tupleDesc;
+    private List<Tuple> childList;
+    private Iterator<Tuple> tupleIterator;
 
     /**
      * Constructor accepts a predicate to apply and a child operator to read
@@ -20,29 +28,46 @@ public class Filter extends Operator {
      */
     public Filter(Predicate p, OpIterator child) {
         // some code goes here
+        this.predicate = p;
+        this.child = child;
+        this.tupleDesc = child.getTupleDesc();
     }
 
     public Predicate getPredicate() {
         // some code goes here
-        return null;
+        return this.predicate;
     }
 
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return this.tupleDesc;
     }
 
     public void open() throws DbException, NoSuchElementException,
             TransactionAbortedException {
         // some code goes here
+        super.open();
+        this.child.open();
+        this.childList = new ArrayList<>();
+        while (this.child.hasNext())
+            this.childList.add((Tuple) this.child.next());
+        this.tupleIterator = this.childList.iterator();
     }
 
     public void close() {
         // some code goes here
+        super.close();
+        this.child.close();
+        this.childList = null;
+        this.tupleIterator = null;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
+        if (this.childList != null)
+            this.tupleIterator = this.childList.iterator();
+        // not sure if operators need to recursively call rewind() on child operators
+        // this.child.rewind();
     }
 
     /**
@@ -57,18 +82,25 @@ public class Filter extends Operator {
     protected Tuple fetchNext() throws NoSuchElementException,
             TransactionAbortedException, DbException {
         // some code goes here
+        // scan through the tupleIterator and return only a tuple that pass the predicate
+        while (this.tupleIterator != null && this.tupleIterator.hasNext()) {
+            Tuple nextTuple = this.tupleIterator.next();
+            if (this.predicate.filter(nextTuple))
+                return nextTuple;
+        }
         return null;
     }
 
     @Override
     public OpIterator[] getChildren() {
         // some code goes here
-        return null;
+        return new OpIterator[] {this.child};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
         // some code goes here
+        this.child = children[0];
     }
 
 }

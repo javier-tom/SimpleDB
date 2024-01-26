@@ -9,6 +9,16 @@ public class Join extends Operator {
 
     private static final long serialVersionUID = 1L;
 
+    // Fields
+    private final JoinPredicate joinPredicate;
+    private String joinPredicateName;
+    private OpIterator child1;
+    private OpIterator child2;
+    // create a mapping from tupleDesc to a list of those tuples
+    private Map<TupleDesc, List<Tuple>> child1Map;
+    private Iterator<Tuple> child1ListItr;
+    private Tuple currChild2Tuple;
+
     /**
      * Constructor. Accepts two children to join and the predicate to join them
      * on
@@ -22,11 +32,22 @@ public class Join extends Operator {
      */
     public Join(JoinPredicate p, OpIterator child1, OpIterator child2) {
         // some code goes here
+        this.joinPredicate = p;
+        this.child1 = child1;
+        this.child2 = child2;
     }
 
     public JoinPredicate getJoinPredicate() {
         // some code goes here
-        return null;
+        return this.joinPredicate;
+    }
+
+    private OpIterator getChild1() {
+        return this.child1;
+    }
+
+    private OpIterator getChild2() {
+        return this.child2;
     }
 
     /**
@@ -36,7 +57,7 @@ public class Join extends Operator {
      * */
     public String getJoinField1Name() {
         // some code goes here
-        return null;
+        return getChild1().getTupleDesc().getFieldName(getJoinPredicate().getField1());
     }
 
     /**
@@ -46,7 +67,7 @@ public class Join extends Operator {
      * */
     public String getJoinField2Name() {
         // some code goes here
-        return null;
+        return getChild2().getTupleDesc().getFieldName(getJoinPredicate().getField2());
     }
 
     /**
@@ -55,20 +76,40 @@ public class Join extends Operator {
      */
     public TupleDesc getTupleDesc() {
         // some code goes here
-        return null;
+        return TupleDesc.merge(getChild1().getTupleDesc(), getChild2().getTupleDesc());
     }
 
     public void open() throws DbException, NoSuchElementException,
             TransactionAbortedException {
         // some code goes here
+        super.open();
+        getChild1().open();
+        getChild2().open();
+        // create a hashmap on child 1 fields
+        this.child1Map = new HashMap<>();
+        while (getChild1().hasNext()) {
+            Tuple tuple = getChild1().next();
+            if (!this.child1Map.containsKey(tuple.tupleDesc)) {
+                this.child1Map.put(tuple.tupleDesc, new ArrayList<>());
+            }
+            this.child1Map.get(tuple.tupleDesc).add(tuple);
+        }
     }
 
     public void close() {
         // some code goes here
+        super.close();
+        getChild1().close();
+        getChild2().close();
+        this.child1Map = null;
+        this.child1ListItr = null;
+        this.currChild2Tuple = null;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
         // some code goes here
+        getChild1().rewind();
+        getChild2().rewind();
     }
 
     /**
@@ -91,18 +132,58 @@ public class Join extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
         // some code goes here
+        // first check to see if we still need to iterate through our child1 iterator
+        if (this.child1ListItr != null) {
+            Tuple mergedTuple = iterateOverChild(this.currChild2Tuple);
+            if (mergedTuple != null)
+                return mergedTuple;
+        }
+
+        // iterate on child 2 and all tuples from child 1 that have matching tupleDesc
+        while (getChild2().hasNext()) {
+            this.currChild2Tuple = getChild2().next();
+            TupleDesc tupleDesc = currChild2Tuple.getTupleDesc();
+            // if we do not find a matching TupleDesc from child 1, move to next tuple
+            if (!this.child1Map.containsKey(tupleDesc)) {
+                continue;
+            }
+            // found matching TupleDesc, iterate over child 1 list
+            this.child1ListItr = this.child1Map.get(tupleDesc).iterator();
+            Tuple mergedTuple = iterateOverChild(this.currChild2Tuple);
+            if (mergedTuple != null)
+                return mergedTuple;
+        }
+        return null;
+    }
+
+    private Tuple iterateOverChild(Tuple child2) {
+        while (this.child1ListItr.hasNext()) {
+            Tuple child1 = this.child1ListItr.next();
+            if (getJoinPredicate().filter(child1, child2))
+                return mergeTuple(child1, child2);
+        }
+        // child1ListIterator has reach the end
+        // null out the previous Tuple from child 2
+        this.currChild2Tuple = null;
+        this.child1ListItr = null;
+        return null;
+    }
+
+    private Tuple mergeTuple(Tuple t1, Tuple t2) {
         return null;
     }
 
     @Override
     public OpIterator[] getChildren() {
         // some code goes here
-        return null;
+        return new OpIterator[] {getChild1(), getChild2()};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
         // some code goes here
+        this.child1 = children[0];
+        this.child2 = children[1];
     }
 
 }
