@@ -11,6 +11,16 @@ public class Aggregate extends Operator {
 
     private static final long serialVersionUID = 1L;
 
+    // Fields
+    private OpIterator child;
+    private int aggregateField;
+    private int groupByField;
+    private Aggregator.Op aggregateOp;
+
+    private final Aggregator aggregator;
+    private OpIterator aggregateIterator;
+    private TupleDesc tupleDesc;
+
     /**
      * Constructor.
      * 
@@ -31,6 +41,31 @@ public class Aggregate extends Operator {
      */
     public Aggregate(OpIterator child, int afield, int gfield, Aggregator.Op aop) {
 	// some code goes here
+        this.child = child;
+        this.aggregateField = afield;
+        this.groupByField = gfield;
+        this.aggregateOp = aop;
+
+        TupleDesc childTupleDesc = child.getTupleDesc();
+        Type aggregateFieldType = childTupleDesc.getFieldType(afield);
+        Type groupByFieldType = null;
+        String groupByName = null;
+        if (gfield != Aggregator.NO_GROUPING) {
+            groupByFieldType = childTupleDesc.getFieldType(gfield);
+            groupByName = childTupleDesc.getFieldName(gfield);
+            String[] fieldNames = new String[] {groupByName,
+                    aop.toString() + " " + childTupleDesc.getFieldName(afield)};
+            this.tupleDesc = new TupleDesc(new Type[] {groupByFieldType, Type.INT_TYPE}, fieldNames);
+        } else {
+            String[] fieldName = new String[] {aop.toString() + " " + childTupleDesc.getFieldName(afield)};
+            this.tupleDesc = new TupleDesc(new Type[] {Type.INT_TYPE}, fieldName);
+        }
+
+        if (aggregateFieldType == Type.INT_TYPE) {
+            this.aggregator = new IntegerAggregator(gfield, groupByFieldType, afield, aop);
+        } else {
+            this.aggregator = new StringAggregator(gfield, groupByFieldType, afield, aop);
+        }
     }
 
     /**
@@ -40,7 +75,7 @@ public class Aggregate extends Operator {
      * */
     public int groupField() {
 	// some code goes here
-	return -1;
+	    return this.groupByField;
     }
 
     /**
@@ -50,7 +85,9 @@ public class Aggregate extends Operator {
      * */
     public String groupFieldName() {
 	// some code goes here
-	return null;
+        if (this.groupByField != Aggregator.NO_GROUPING)
+            return this.tupleDesc.getFieldName(0);
+	    return null;
     }
 
     /**
@@ -58,7 +95,7 @@ public class Aggregate extends Operator {
      * */
     public int aggregateField() {
 	// some code goes here
-	return -1;
+	    return this.aggregateField;
     }
 
     /**
@@ -67,7 +104,9 @@ public class Aggregate extends Operator {
      * */
     public String aggregateFieldName() {
 	// some code goes here
-	return null;
+        if (this.aggregateField == Aggregator.NO_GROUPING)
+            return this.tupleDesc.getFieldName(0);
+	    return this.tupleDesc.getFieldName(1);
     }
 
     /**
@@ -75,16 +114,23 @@ public class Aggregate extends Operator {
      * */
     public Aggregator.Op aggregateOp() {
 	// some code goes here
-	return null;
+	    return this.aggregateOp;
     }
 
     public static String nameOfAggregatorOp(Aggregator.Op aop) {
-	return aop.toString();
+	    return aop.toString();
     }
 
     public void open() throws NoSuchElementException, DbException,
 	    TransactionAbortedException {
 	// some code goes here
+        this.child.open();
+        while (this.child.hasNext()) {
+            aggregator.mergeTupleIntoGroup(child.next());
+        }
+        aggregateIterator = aggregator.iterator();
+        aggregateIterator.open();
+        super.open();
     }
 
     /**
@@ -96,11 +142,14 @@ public class Aggregate extends Operator {
      */
     protected Tuple fetchNext() throws TransactionAbortedException, DbException {
 	// some code goes here
-	return null;
+        if (aggregateIterator.hasNext())
+            return aggregateIterator.next();
+	    return null;
     }
 
     public void rewind() throws DbException, TransactionAbortedException {
 	// some code goes here
+        aggregateIterator.rewind();
     }
 
     /**
@@ -116,22 +165,27 @@ public class Aggregate extends Operator {
      */
     public TupleDesc getTupleDesc() {
 	// some code goes here
-	return null;
+	    return this.tupleDesc;
     }
 
     public void close() {
 	// some code goes here
+        super.close();
+        aggregateIterator.close();
+        aggregateIterator = null;
+        child.close();
     }
 
     @Override
     public OpIterator[] getChildren() {
 	// some code goes here
-	return null;
+	return new OpIterator[] {this.child};
     }
 
     @Override
     public void setChildren(OpIterator[] children) {
 	// some code goes here
+        this.child = children[0];
     }
     
 }
