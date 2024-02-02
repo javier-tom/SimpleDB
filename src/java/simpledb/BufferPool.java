@@ -28,11 +28,8 @@ public class BufferPool {
 
     // Fields
     private final int maxNumPages;
-    private int currNumPages;
-    // create list that appends pages to the end.
+    // Use a LinkedHashMap to maintain order of insertions
     // if doing LFU policy we can remove the head of the list
-    private final List<Page> pageList;
-    // create a mapping for pageId to Page
     private final Map<PageId, Page> pageMap;
 
     /**
@@ -42,10 +39,8 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         // some code goes here
-        this.currNumPages = 0;
         this.maxNumPages = numPages;
-        this.pageList = new LinkedList<>();
-        this.pageMap = new HashMap<>();
+        this.pageMap = new LinkedHashMap<>();
     }
     
     public static int getPageSize() {
@@ -82,19 +77,16 @@ public class BufferPool {
         // some code goes here
         if (this.pageMap.containsKey(pid)) {
             Page page = this.pageMap.get(pid);
-            this.pageList.remove(page);
-            this.pageList.add(page);
+            this.pageMap.put(pid, page);
             return page;
         }
         // check if we need to evict page
         if (checkBufferPoolSizeFull())
-            throw new DbException("BufferPool full with no eviction policy");
+            evictPage();
         // page is absent, retrieve from disk
         DbFile dbFile = Database.getCatalog().getDatabaseFile(pid.getTableId());
         Page page = dbFile.readPage(pid);
         this.pageMap.put(pid, page);
-        this.pageList.add(page);
-        this.currNumPages += 1;
         return page;
     }
 
@@ -200,8 +192,8 @@ public class BufferPool {
      */
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
-        // not necessary for lab1
-
+        for (Page page : this.pageMap.values())
+            flushPage(page.getId());
     }
 
     /** Remove the specific page id from the buffer pool.
@@ -223,7 +215,15 @@ public class BufferPool {
      */
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
-        // not necessary for lab1
+        // just write page to disk, do not remove from buffer pool
+        Page page = this.pageMap.get(pid);
+        TransactionId lastTouchedId = page.isDirty();
+        // check to see if page is dirty, only write pages that are
+        if (lastTouchedId != null) {
+            HeapFile file = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
+            file.writePage(page);
+            page.markDirty(false, null);
+        }
     }
 
     /** Write all pages of the specified transaction to disk.
@@ -239,7 +239,17 @@ public class BufferPool {
      */
     private synchronized  void evictPage() throws DbException {
         // some code goes here
-        // not necessary for lab1
+        // using a LinkedHashMap we can evict the first Page in our entry set
+        // this could throw an error if pageMap has no pages to evict, but should never happen.
+        Iterator<Map.Entry<PageId, Page>> entrySet = this.pageMap.entrySet().iterator();
+        Map.Entry<PageId, Page> entry = entrySet.next();
+        try {
+            flushPage(entry.getKey());
+            this.pageMap.remove(entry.getKey());
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new DbException("Could not flush page while trying to evict from BufferPool.");
+        }
     }
 
     ///////////////////////////////////////////////////////////////
@@ -247,7 +257,7 @@ public class BufferPool {
     ///////////////////////////////////////////////////////////////
 
     private boolean checkBufferPoolSizeFull() {
-        return this.currNumPages >= this.maxNumPages;
+        return this.pageMap.size() >= this.maxNumPages;
     }
 
 }
