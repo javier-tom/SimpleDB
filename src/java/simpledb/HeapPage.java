@@ -13,11 +13,13 @@ import java.io.*;
  */
 public class HeapPage implements Page {
 
-    final HeapPageId pid;
-    final TupleDesc td;
-    final byte header[];
-    final Tuple tuples[];
-    final int numSlots;
+    private final HeapPageId pid;
+    private final TupleDesc td;
+    private final byte header[];
+    private final Tuple tuples[];
+    private final int numSlots;
+    private TransactionId lastTransactionId;
+    private boolean isDirty;
 
     byte[] oldData;
     private final Byte oldDataLock=new Byte((byte)0);
@@ -71,6 +73,14 @@ public class HeapPage implements Page {
         int pageSize = BufferPool.getPageSize() * 8;
         int tupleSize = this.td.getSize() * 8 + 1;
         return pageSize / tupleSize;
+    }
+
+    public int getNumSlots() {
+        return this.numSlots;
+    }
+
+    public TupleDesc getTupleDesc() {
+        return this.td;
     }
 
     /**
@@ -245,7 +255,24 @@ public class HeapPage implements Page {
      */
     public void deleteTuple(Tuple t) throws DbException {
         // some code goes here
-        // not necessary for lab1
+        // loop through our tuples array and look for t
+        for (int i = 0; i < getNumSlots(); i++) {
+            if (this.tuples[i] == null) continue;
+            // use toString to compare two tuples
+            // TODO: Find a better method for comparison
+            if (this.tuples[i].toString().equals(t.toString())) {
+                // first check to see if tuple slot is already empty
+                if (!isSlotUsed(i)) {
+                    throw new DbException("Trying to delete an already empty slot.");
+                }
+                // do delete
+                this.tuples[i] = null;
+                markSlotUsed(i, false);
+                return;
+            }
+        }
+        // did not find tuple t in list of tuples
+        throw new DbException("Tuple to delete not in page.");
     }
 
     /**
@@ -257,7 +284,24 @@ public class HeapPage implements Page {
      */
     public void insertTuple(Tuple t) throws DbException {
         // some code goes here
-        // not necessary for lab1
+        if (!getTupleDesc().equals(t.getTupleDesc())) {
+            throw new DbException("Trying to insert tuple to page with TupleDesc mismatch.");
+        } else if (getNumEmptySlots() == 0) {
+            throw new DbException("Page is full.");
+        }
+        // loop through the header to see where there is an available slot to insert new tuple
+        for (int i = 0; i < getNumSlots(); i++) {
+            if (!isSlotUsed(i)) {
+                // update tuple's heap page ID
+                RecordId newRecordID = new RecordId(getId(), i);
+                t.setRecordId(newRecordID);
+
+                // add tuple to tuple list and modify header
+                this.tuples[i] = t;
+                markSlotUsed(i, true);
+                break;
+            }
+        }
     }
 
     /**
@@ -266,7 +310,8 @@ public class HeapPage implements Page {
      */
     public void markDirty(boolean dirty, TransactionId tid) {
         // some code goes here
-	// not necessary for lab1
+        this.isDirty = dirty;
+        this.lastTransactionId = tid;
     }
 
     /**
@@ -274,8 +319,10 @@ public class HeapPage implements Page {
      */
     public TransactionId isDirty() {
         // some code goes here
-	// Not necessary for lab1
-        return null;      
+        if (isDirty) {
+            return this.lastTransactionId;
+        }
+        return null;
     }
 
     /**
@@ -310,6 +357,16 @@ public class HeapPage implements Page {
     private void markSlotUsed(int i, boolean value) {
         // some code goes here
         // not necessary for lab1
+        int byteIndex = i / 8;
+        int bitIndex = i % 8;
+        // clear the bit
+        if (!value) {
+            // clear bit by taking AND with the complement
+            this.header[byteIndex] &= ~(1 << bitIndex);
+        } else {
+            // mark header as filled
+            this.header[byteIndex] |= (1 << bitIndex);
+        }
     }
 
     /**
