@@ -1,0 +1,43 @@
+1) The runtimes for exercise 7, run on attu3 server:
+    Query 1: 0.57 seconds
+    Query 2: killed by attu server after 45 minutes.
+    Query 3: killed by attu server after 40 minutes.
+
+2)  Lab 2 was about implementing Operations that work on Tuples. We implement Join and Filter operations
+    that join two OpIterators on a join predicate and filter tuples via a predicate, respectively. Both of these
+    classes extend Operator which implements OpIterator, meaning they follow the query execution covered in class
+    with open(), next(), and close().
+
+    In lab2 we also implement the logic for tuple insertions and deletions for HeapPages. There is a level of indirection
+    where Insert operator would insert tuples on behalf of the child operator by calling insertTuple() on the DataBase
+    BufferPool. The BufferPool would then call the heap file's insertTuple() method, which then calls the heap page's
+    insertTuple() method. Heap page handles the logic of saving the tuple on-hand and updating its header to reflect
+    the change. Deletions follow a similar logic.
+
+    This lab also asked for the implementation of maintaining the BufferPool's cache. The BufferPool keeps record of
+    the pages that have been written to, marking them dirty and writing the changes to disk. The BufferPool's cache
+    has a limit to the number of pages it can hold on hand at a single instance. The BufferPool follows the least frequently
+    used eviction policy when it needs to make space for a new page, flushing the evicted page to disk if marked dirty.
+
+
+3)  I used the least frequently used eviction policy. I did this easily by using a Java LinkedHashMap which maintains
+    an insertion-order. In BufferPool's getPage() method I make sure to reinsert the page back into the map to update
+    the order. This way the least frequently used page should always be at the head of the list.
+
+    I used a nested loop algorithm for joins and noticed the extremely long runtimes. Queries 2 and 3 failed to
+    complete on attu.
+
+    When implementing IntegerAggregator I chose to use two maps to keep track of the field that the satisfied
+    the aggregate. For calculating the average, I used a simple Pair class to easily keep record of a sum and count
+    of fields and later return the average once done processing all the fields.
+
+    For Filter, I chose to read all the tuples from the child OpIterator within open() then later apply the filter()
+    method in the call to fetchNext().
+
+4)  Something that I think we can test for is for the efficiency of evictPage(). It was mentioned in class that any
+    implementation of evictPage() should work, even if we evict the newly added page. This could drastically slow
+    our database if we frequently processed queries on a few set of pages. The test case would loop and perform some
+    operations on a set of page on a full BufferPool cache and see that we implemented a reasonable eviction policy.
+
+5)  I did not make any changes to the API.
+6)  There are no missing or incomplete elements in the code.

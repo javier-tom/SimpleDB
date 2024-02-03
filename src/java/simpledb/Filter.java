@@ -50,7 +50,7 @@ public class Filter extends Operator {
         this.child.open();
         this.childList = new ArrayList<>();
         while (this.child.hasNext())
-            this.childList.add((Tuple) this.child.next());
+            this.childList.add(this.child.next());
         this.tupleIterator = this.childList.iterator();
     }
 
