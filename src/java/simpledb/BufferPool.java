@@ -27,6 +27,7 @@ public class BufferPool {
     public static final int DEFAULT_PAGES = 50;
 
     // Fields
+    private final LockManager lockManager;
     private final int maxNumPages;
     // Use a LinkedHashMap to maintain order of insertions
     // if doing LFU policy we can remove the head of the list
@@ -39,6 +40,7 @@ public class BufferPool {
      */
     public BufferPool(int numPages) {
         // some code goes here
+        this.lockManager = new LockManager();
         this.maxNumPages = numPages;
         this.pageMap = new LinkedHashMap<>();
     }
@@ -73,8 +75,15 @@ public class BufferPool {
      * @param perm the requested permissions on the page
      */
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
-        throws TransactionAbortedException, DbException {
+            throws TransactionAbortedException, DbException {
         // some code goes here
+        // transaction will wait it cannot acquire the lock
+        try {
+            this.lockManager.acquireLock(tid, pid, perm);
+        } catch (InterruptedException e) {
+            this.lockManager.releaseLocks(tid);
+            throw new TransactionAbortedException();
+        }
         if (this.pageMap.containsKey(pid)) {
             Page page = this.pageMap.get(pid);
             this.pageMap.put(pid, page);
@@ -101,7 +110,7 @@ public class BufferPool {
      */
     public  void releasePage(TransactionId tid, PageId pid) {
         // some code goes here
-        // not necessary for lab1|lab2
+        this.lockManager.releaseLock(tid, pid);
     }
 
     /**
@@ -117,8 +126,7 @@ public class BufferPool {
     /** Return true if the specified transaction has a lock on the specified page */
     public boolean holdsLock(TransactionId tid, PageId p) {
         // some code goes here
-        // not necessary for lab1|lab2
-        return false;
+        return this.lockManager.holdsLock(tid, p);
     }
 
     /**
@@ -237,7 +245,7 @@ public class BufferPool {
      * Discards a page from the buffer pool.
      * Flushes the page to disk to ensure dirty pages are updated on disk.
      */
-    private synchronized  void evictPage() throws DbException {
+    private synchronized void evictPage() throws DbException {
         // some code goes here
         // using a LinkedHashMap we can evict the first Page in our entry set
         // this could throw an error if pageMap has no pages to evict, but should never happen.
