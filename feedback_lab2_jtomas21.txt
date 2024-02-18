@@ -1,0 +1,15 @@
+Feedback for: jtomas21
+--------------------------------------------------------------
+Total Score (%): 98
+Unit Test Score (out of 32): 38
+System Test Score (out of 4): 24
+Code Score (out of 10): 9
+Writeup Score (out of 10): 9
+--------------------------------------------------------------
+Nice work!
+
+Code:
+(-1) Please remove commented out code and also please comment code blocks that seem a bit more complex and non-trivial
+
+Writeup:
+(-1) You gave a great description of what the lab is about in general. You should also describe the various, specific components you implemented and what they do. For example, describe what StringAggregator does.
