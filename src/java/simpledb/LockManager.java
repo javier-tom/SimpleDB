@@ -172,4 +172,11 @@ public class LockManager {
     public boolean holdsLock(TransactionId tid, PageId pageId) {
         return this.transactionIdListMap.get(tid).contains(pageId);
     }
+
+    public Set<PageId> getTransactionPageList(TransactionId tid) {
+        // this should never be the case
+        if (!this.transactionIdListMap.containsKey(tid))
+            return null;
+        return this.transactionIdListMap.get(tid);
+    }
 }

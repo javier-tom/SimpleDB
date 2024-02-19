@@ -3,6 +3,7 @@ package simpledb;
 import java.io.*;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * BufferPool manages the reading and writing of pages into memory from
@@ -42,7 +43,7 @@ public class BufferPool {
         // some code goes here
         this.lockManager = new LockManager();
         this.maxNumPages = numPages;
-        this.pageMap = new LinkedHashMap<>();
+        this.pageMap = new ConcurrentHashMap<>();
     }
     
     public static int getPageSize() {
@@ -119,7 +120,7 @@ public class BufferPool {
      */
     public void transactionComplete(TransactionId tid) throws IOException {
         // some code goes here
-        // not necessary for lab1|lab2
+        transactionComplete(tid, true);
     }
 
     /** Return true if the specified transaction has a lock on the specified page */
@@ -138,7 +139,14 @@ public class BufferPool {
     public void transactionComplete(TransactionId tid, boolean commit)
         throws IOException {
         // some code goes here
-        // not necessary for lab1|lab2
+        if (commit) {
+            // flush all dirty pages to disk.
+            flushPages(tid);
+        } else { // ABORT
+            // reset all pages to beforeImage
+            resetPages(tid);
+        }
+        this.lockManager.releaseLocks(tid);
     }
 
     /**
@@ -203,6 +211,13 @@ public class BufferPool {
             flushPage(page.getId());
     }
 
+    private synchronized void discardPages(TransactionId tid) {
+        Set<PageId> pageList = this.lockManager.getTransactionPageList(tid);
+        for (PageId pageId : pageList) {
+            discardPage(pageId);
+        }
+    }
+
     /** Remove the specific page id from the buffer pool.
         Needed by the recovery manager to ensure that the
         buffer pool doesn't keep a rolled back page in its
@@ -213,7 +228,12 @@ public class BufferPool {
     */
     public synchronized void discardPage(PageId pid) {
         // some code goes here
-        // not necessary for lab1
+        Page page = this.pageMap.get(pid);
+        TransactionId lastTouchedId = page.isDirty();
+        // only discard pages that have been written to.
+        if (lastTouchedId != null) {
+            this.pageMap.remove(pid);
+        }
     }
 
     /**
@@ -222,7 +242,6 @@ public class BufferPool {
      */
     private synchronized  void flushPage(PageId pid) throws IOException {
         // some code goes here
-        // just write page to disk, do not remove from buffer pool
         Page page = this.pageMap.get(pid);
         TransactionId lastTouchedId = page.isDirty();
         // check to see if page is dirty, only write pages that are
@@ -230,6 +249,7 @@ public class BufferPool {
             HeapFile file = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
             file.writePage(page);
             page.markDirty(false, null);
+            page.setBeforeImage();
         }
     }
 
@@ -237,7 +257,12 @@ public class BufferPool {
      */
     public synchronized  void flushPages(TransactionId tid) throws IOException {
         // some code goes here
-        // not necessary for lab1|lab2
+        // use LockManager to get the list of pages that this transaction has locks to.
+        Set<PageId> pageList = this.lockManager.getTransactionPageList(tid);
+        for (PageId pageId : pageList) {
+            if (this.pageMap.containsKey(pageId))
+                flushPage(pageId);
+        }
     }
 
     /**
@@ -246,17 +271,15 @@ public class BufferPool {
      */
     private synchronized void evictPage() throws DbException {
         // some code goes here
-        // using a LinkedHashMap we can evict the first Page in our entry set
-        // this could throw an error if pageMap has no pages to evict, but should never happen.
-        Iterator<Map.Entry<PageId, Page>> entrySet = this.pageMap.entrySet().iterator();
-        Map.Entry<PageId, Page> entry = entrySet.next();
-        try {
-            flushPage(entry.getKey());
-            this.pageMap.remove(entry.getKey());
-        } catch (IOException e) {
-            e.printStackTrace();
-            throw new DbException("Could not flush page while trying to evict from BufferPool.");
+
+        // find the first non-dirty page.
+        for (Map.Entry<PageId, Page> entry : this.pageMap.entrySet()) {
+            if (entry.getValue().isDirty() == null) {
+                this.pageMap.remove(entry.getKey());
+                return;
+            }
         }
+         throw new DbException("Cannot evict dirty page!");
     }
 
     ///////////////////////////////////////////////////////////////
@@ -267,4 +290,13 @@ public class BufferPool {
         return this.pageMap.size() >= this.maxNumPages;
     }
 
+    private synchronized void resetPages(TransactionId tid) {
+        Set<PageId> pageList = this.lockManager.getTransactionPageList(tid);
+        for (PageId pid : pageList) {
+            if (this.pageMap.containsKey(pid)) {
+                Page dirtyPage = this.pageMap.get(pid);
+                this.pageMap.put(pid, dirtyPage.getBeforeImage());
+            }
+        }
+    }
 }
