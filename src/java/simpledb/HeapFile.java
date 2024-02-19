@@ -121,7 +121,6 @@ public class HeapFile implements DbFile {
         // tuple to that page.
         for (int i = 0; i < numPages(); i++) {
             PageId pageId = new HeapPageId(getId(), i);
-//            HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_WRITE);
             HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_ONLY);
 
             // found a page with available space
@@ -129,15 +128,13 @@ public class HeapFile implements DbFile {
                 page = (HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_WRITE);
                 page.insertTuple(t);
                 return new ArrayList<>(Arrays.asList(page));
-            } else {
-                Database.getBufferPool().releasePage(tid, pageId);
             }
         }
         // create new page to hold tuple
         PageId pageId = new HeapPageId(getId(), numPages());
         HeapPage page = (HeapPage) Database.getBufferPool().getPage(tid, pageId, Permissions.READ_WRITE);
         page.insertTuple(t);
-//        writePage(page);
+        writePage(page);
         return new ArrayList<>(Arrays.asList(page));
     }
 

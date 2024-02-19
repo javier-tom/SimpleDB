@@ -77,11 +77,10 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
         // some code goes here
-        // transaction will wait it cannot acquire the lock
+        // transaction will wait if it cannot acquire the lock
         try {
             this.lockManager.acquireLock(tid, pid, perm);
         } catch (InterruptedException e) {
-            this.lockManager.releaseLocks(tid);
             throw new TransactionAbortedException();
         }
         if (this.pageMap.containsKey(pid)) {
