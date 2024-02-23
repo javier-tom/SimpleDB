@@ -1,6 +1,7 @@
 package simpledb;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Lock Manager for transactions.
@@ -17,10 +18,12 @@ public class LockManager {
     private class Lock {
         private LockType type;
         private Set<TransactionId> sharedLock;
+        private Set<TransactionId> waitingTid;
 
         public Lock(LockType type) {
             this.type = type;
             this.sharedLock = new HashSet<>();
+            this.waitingTid = new HashSet<>();
         }
 
         public boolean isSharedLock() {
@@ -39,6 +42,14 @@ public class LockManager {
             this.sharedLock.remove(tid);
         }
 
+        public void addWaitingTid(TransactionId tid) {
+            this.waitingTid.add(tid);
+        }
+
+        public void removeWaitingTid(TransactionId tid) {
+            this.waitingTid.remove(tid);
+        }
+
         public Set<TransactionId> getSharedLock() {
             return this.sharedLock;
         }
@@ -50,13 +61,41 @@ public class LockManager {
     private Map<PageId, Lock> pageLocks;
     // have a list of all the pages a specific transaction holds locks to
     private Map<TransactionId, Set<PageId>> transactionIdListMap;
+    private Map<TransactionId, Set<TransactionId>> dependencyGraph;
 
     /**
      * Constructs a LockManager with empty fields.
      */
     public LockManager() {
-        this.pageLocks = new HashMap<>();
-        this.transactionIdListMap = new HashMap<>();
+        this.pageLocks = new ConcurrentHashMap<>();
+        this.transactionIdListMap = new ConcurrentHashMap<>();
+        this.dependencyGraph = new ConcurrentHashMap<>();
+    }
+
+    /**
+     * Used for checking for deadlocks. For all TransactionIds the current transaction (tid) is waiting on, check to
+     * see that none of the those transactions are waiting on it.
+     * @param tid the TransactionId to check against.
+     * @throws TransactionAbortedException if a deadlock is detected.
+     */
+    private synchronized void checkDeadLock(TransactionId tid, PageId pid) throws TransactionAbortedException {
+        Lock lock = this.pageLocks.get(pid);
+        Set<TransactionId> visited = new HashSet<>();
+        Queue<TransactionId> queue = new ArrayDeque<>(lock.getSharedLock());
+        while(!queue.isEmpty()) {
+            TransactionId currentTid = queue.poll();
+            Set<TransactionId> waitingFor = this.dependencyGraph.get(currentTid);
+            if (waitingFor == null) return;
+            for (TransactionId id : waitingFor) {
+                if (!visited.contains(id)) {
+                    if (id.equals(tid)) {
+                        throw new TransactionAbortedException();
+                    }
+                    queue.add(id);
+                    visited.add(id);
+                }
+            }
+        }
     }
 
     /**
@@ -70,61 +109,67 @@ public class LockManager {
      * @param pageId PageId of the page the transaction is trying to acquire the lock for.
      * @param perm Permission the transaction is asking for (Read/Write)
      */
-    public synchronized void acquireLock(TransactionId tid, PageId pageId, Permissions perm) throws InterruptedException {
+    public synchronized void acquireLock(TransactionId tid, PageId pageId, Permissions perm) throws InterruptedException, TransactionAbortedException {
         this.pageLocks.putIfAbsent(pageId, new Lock(LockType.UNUSED));
         this.transactionIdListMap.putIfAbsent(tid, new HashSet<>());
+        this.dependencyGraph.putIfAbsent(tid, new HashSet<>());
 
         Lock lock = this.pageLocks.get(pageId);
         Set<PageId> transactionList = this.transactionIdListMap.get(tid);
-        // set rules when trying to do a READ_ONLY
-        // if lock already has a transaction holding it, make sure there are more
-        // transaction other than itself. Don't lock self out!
 
-        // more than one unique transaction
-        if (lock.getSharedLock().size() > 1) {
-            if (perm == Permissions.READ_ONLY && lock.isSharedLock()) {
-                lock.addTransactionId(tid);
-                transactionList.add(pageId);
-            } else if (perm == Permissions.READ_WRITE) {
-                // trying to do a read-write on a page with more than one transaction holding lock to page
-                // just wait until page becomes available.
-                wait();
-            }
-        } else if (lock.getSharedLock().size() == 1) { // only one transaction, make sure it is different from current
-            // transaction.
-            // check for different transaction
-            if (!lock.getSharedLock().contains(tid)) {
-                // check to see if other transaction does not have an exclusive lock to page
+        while(true) {
+            // more than one unique transaction
+            if (lock.getSharedLock().size() > 1) {
+                // trying to do a read on a page with more than one transaction holding lock to page
                 if (perm == Permissions.READ_ONLY && lock.isSharedLock()) {
                     lock.addTransactionId(tid);
+                    lock.removeWaitingTid(tid);
                     transactionList.add(pageId);
                     return;
+                } else {
+                    // trying to do a read-write to a page that already has other transactions holding a lock.
+                    // add self to waiting list.
+                    lock.addWaitingTid(tid);
+                    this.dependencyGraph.get(tid).addAll(lock.getSharedLock());
                 }
-                // else, other transaction does have an exclusive lock on page, wait()
-                wait();
-            } else {
-                // this transaction is the only one holding lock on page
-                // check to see if it wants to upgrade lock.
-                if (perm == Permissions.READ_WRITE) {
+            } else if (lock.getSharedLock().size() == 1) {
+                // only one transaction, make sure it is different from current transaction.
+                // check to see if this transaction is the only one holding lock on page
+                if (lock.getSharedLock().contains(tid)) {
+                    // check if we need to update lock status
+                    if (perm == Permissions.READ_WRITE)
+                        lock.setLockType(LockType.EXCLUSIVE);
+                    lock.removeWaitingTid(tid);
+                    return;
+                } else { // another transaction holds a lock to page
+                    if (perm == Permissions.READ_ONLY && lock.isSharedLock()) {
+                        lock.addTransactionId(tid);
+                        transactionList.add(pageId);
+                        return;
+                    } else {
+                        this.dependencyGraph.get(tid).addAll(lock.getSharedLock());
+                    }
+                }
+            } else { // no transactions holding page
+                if (perm == Permissions.READ_ONLY) {
+                    lock.setLockType(LockType.SHARED);
+                } else {
                     lock.setLockType(LockType.EXCLUSIVE);
                 }
-            }
-        } else { // no transactions holding page
-            if (perm == Permissions.READ_ONLY) {
-                lock.setLockType(LockType.SHARED);
                 lock.addTransactionId(tid);
+                lock.removeWaitingTid(tid);
                 transactionList.add(pageId);
-            } else if (perm == Permissions.READ_WRITE) {
-                lock.setLockType(LockType.EXCLUSIVE);
-                lock.addTransactionId(tid);
-                transactionList.add(pageId);
+                return;
             }
+            // current transaction was not able to gain access, wait until lock becomes available
+            checkDeadLock(tid, pageId);
+            wait();
         }
     }
 
     /**
      * Will release all lock held by the specified transaction.
-     * @param tid the TransactionID of transaction releasing pages.
+     * @param tid the TransactionId of transaction releasing pages.
      */
     public synchronized void releaseLocks(TransactionId tid) {
         // check to see if transaction holds any locks
@@ -134,12 +179,18 @@ public class LockManager {
         for (PageId pageId : pageList) {
             Lock lock = this.pageLocks.get(pageId);
             lock.removeTransactionId(tid);
-            if (lock.getSharedLock().isEmpty())
-                // can either remove reference to pageId or
-                // set lock status to LockType.UNUSED
+            lock.removeWaitingTid(tid);
+            if (lock.getSharedLock().isEmpty()) {
                 lock.setLockType(LockType.UNUSED);
+            }
         }
+
+        for (Set<TransactionId> set : this.dependencyGraph.values()) {
+            set.remove(tid);
+        }
+
         this.transactionIdListMap.remove(tid);
+        this.dependencyGraph.remove(tid);
         notifyAll();
     }
 
@@ -158,6 +209,13 @@ public class LockManager {
         if (lock.getSharedLock().isEmpty()) {
             lock.setLockType(LockType.UNUSED);
         }
+
+        for (TransactionId id : lock.getSharedLock()) {
+            Set<TransactionId> waitingSet = this.dependencyGraph.get(id);
+            if (waitingSet != null) {
+                waitingSet.remove(tid);
+            }
+        }
         Set<PageId> pageList = this.transactionIdListMap.get(tid);
         pageList.remove(pageId);
         notifyAll();
@@ -170,13 +228,13 @@ public class LockManager {
      * @return true when transaction does hold a lock on page, false otherwise.
      */
     public boolean holdsLock(TransactionId tid, PageId pageId) {
-        return this.transactionIdListMap.get(tid).contains(pageId);
+        Set<PageId> pageList = this.transactionIdListMap.get(tid);
+        if (pageList != null)
+            return pageList.contains(pageId);
+        return false;
     }
 
     public Set<PageId> getTransactionPageList(TransactionId tid) {
-        // this should never be the case
-        if (!this.transactionIdListMap.containsKey(tid))
-            return null;
         return this.transactionIdListMap.get(tid);
     }
 }

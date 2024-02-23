@@ -78,11 +78,9 @@ public class BufferPool {
     public Page getPage(TransactionId tid, PageId pid, Permissions perm)
             throws TransactionAbortedException, DbException {
         // some code goes here
-        // transaction will wait if it cannot acquire the lock
         try {
             this.lockManager.acquireLock(tid, pid, perm);
         } catch (InterruptedException e) {
-            throw new TransactionAbortedException();
         }
         if (this.pageMap.containsKey(pid)) {
             Page page = this.pageMap.get(pid);
@@ -255,10 +253,11 @@ public class BufferPool {
 
     /** Write all pages of the specified transaction to disk.
      */
-    public synchronized  void flushPages(TransactionId tid) throws IOException {
+    public synchronized void flushPages(TransactionId tid) throws IOException {
         // some code goes here
         // use LockManager to get the list of pages that this transaction has locks to.
         Set<PageId> pageList = this.lockManager.getTransactionPageList(tid);
+        if (pageList == null) return;
         for (PageId pageId : pageList) {
             if (this.pageMap.containsKey(pageId))
                 flushPage(pageId);
@@ -292,6 +291,7 @@ public class BufferPool {
 
     private synchronized void resetPages(TransactionId tid) {
         Set<PageId> pageList = this.lockManager.getTransactionPageList(tid);
+        if (pageList == null) return;
         for (PageId pid : pageList) {
             if (this.pageMap.containsKey(pid)) {
                 Page dirtyPage = this.pageMap.get(pid);
