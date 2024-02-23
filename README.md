@@ -22,11 +22,7 @@ $ ./turnInLab.sh lab3-part1
 
 ## 1\. Getting started
 
-<<<<<<< HEAD
-You should begin with the code you submitted for Lab 1 (if you did not submit code for Lab 1, or your solution didn't work properly, contact Ryan by email to discuss options for finishing Lab 1). We have provided you with extra code and extra test cases for this lab that are not in the original code distribution you received. We reiterate that the unit tests we provide are to help guide your implementation along, but they are not intended to be comprehensive or to establish correctness.
-=======
 You should begin with the code you submitted for Lab 2 (if you did not submit code for Lab 2, or your solution didn't work properly, contact us to discuss). We have provided you with extra test cases for this lab that are not in the original code distribution you received. We reiterate that the unit tests we provide are to help guide your implementation along, but they are not intended to be comprehensive or to establish correctness.
->>>>>>> 385972194f011abd9841ed473fa121c7d51f5cd2
 
 You will need to add these new files to your release. You will do this by performing a `git` pull from the upstream repository that you configured during the previous lab.  
 
