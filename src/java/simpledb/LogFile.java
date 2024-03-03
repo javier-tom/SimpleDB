@@ -1,9 +1,12 @@
 
 package simpledb;
 
+import org.omg.CORBA.UNKNOWN;
+
 import java.io.*;
 import java.util.*;
 import java.lang.reflect.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
 LogFile implements the recovery subsystem of SimpleDb.  This class is
@@ -466,7 +469,52 @@ public class LogFile {
         synchronized (Database.getBufferPool()) {
             synchronized(this) {
                 preAppend();
-                // some code goes here
+                long offset = this.tidToFirstLogRecord.get(tid.getId());
+                this.raf.seek(offset);
+
+                // verify that raf is pointing to a BEGIN_RECORD
+                assert (this.raf.readInt() == BEGIN_RECORD);
+                // ignore tid for BEGIN_RECORD and offset
+                this.raf.skipBytes(LONG_SIZE * 2);
+
+                // keep record of all pages already undo. We revert page data back to
+                // the original data (i.e. before the first change was made by tid)
+                Set<PageId> processedPages = new HashSet<>();
+
+                // read until the end of the log file
+                while (this.raf.getFilePointer() < this.raf.length()) {
+                    int record = this.raf.readInt();
+                    long id = this.raf.readLong();
+
+                    switch (record) {
+                        case UPDATE_RECORD:
+                            if (id == tid.getId()) {
+                                Page beforePageData = readPageData(this.raf);
+                                readPageData(this.raf);
+
+                                if (!processedPages.contains(beforePageData.getId())) {
+                                    HeapFile file = (HeapFile) Database.getCatalog().getDatabaseFile(
+                                            beforePageData.getId().getTableId());
+                                    Database.getBufferPool().discardPage(beforePageData.getId());
+                                    file.writePage(beforePageData);
+                                    processedPages.add(beforePageData.getId());
+                                }
+                            } else {
+                                readPageData(this.raf);
+                                readPageData(this.raf);
+                            }
+                            break;
+                        case CHECKPOINT_RECORD:
+                            int num = this.raf.readInt();
+                            while (num-- > 0) {
+                                this.raf.skipBytes(LONG_SIZE*2);
+                            }
+                            break;
+                        default:
+                            break;
+                    }
+                    this.raf.skipBytes(LONG_SIZE);
+                }
             }
         }
     }
@@ -494,6 +542,85 @@ public class LogFile {
             synchronized (this) {
                 recoveryUndecided = false;
                 // some code goes here
+                // step 1: find the last successful checkpoint
+                // step 2: from last checkpoint get a list of all active transactions
+                // step 3: read the log file, if active transactions commit add them to committed set
+                // step 4: read again this time only redoing committed transactions
+
+                // start at the beginning of log file.
+                this.raf.seek(0);
+                long checkpointOffset = this.raf.readLong();
+                Set<Long> committedTxn = new HashSet<>();
+
+                long earliestActiveTxn = Long.MAX_VALUE;
+                // move to most recent checkpoint if there is one
+                if (checkpointOffset != NO_CHECKPOINT_ID) {
+                    this.raf.seek(checkpointOffset);
+                    assert (this.raf.readInt() == CHECKPOINT_RECORD);
+                    this.raf.skipBytes(LONG_SIZE);
+                    int numActiveTxn = this.raf.readInt();
+                    while (numActiveTxn-- > 0) {
+                        this.raf.skipBytes(LONG_SIZE);
+                        long offset = this.raf.readLong();
+                        if (offset < earliestActiveTxn) {
+                            earliestActiveTxn = offset;
+                        }
+                    }
+                    this.raf.skipBytes(LONG_SIZE);
+                }
+                // no active transactions, start 8 bytes into log skipping checkpoint offset
+                if (earliestActiveTxn == Long.MAX_VALUE)
+                    earliestActiveTxn = LONG_SIZE;
+
+                // read from the end of the checkpoint, add new Transactions that start
+                // record all transactions that commit.
+                while (this.raf.getFilePointer() < this.raf.length()) {
+                    int record = this.raf.readInt();
+                    long tid = this.raf.readLong();
+
+                    if (record == BEGIN_RECORD) {
+                        this.tidToFirstLogRecord.put(tid, this.raf.readLong());
+                        continue;
+                    } else if (record == COMMIT_RECORD) {
+                        committedTxn.add(tid);
+                        this.tidToFirstLogRecord.remove(tid);
+                    } else if (record == ABORT_RECORD) {
+                        // rollback for aborts would already be handled
+                        this.tidToFirstLogRecord.remove(tid);
+                    } else if (record == UPDATE_RECORD){
+                        readPageData(this.raf);
+                        readPageData(this.raf);
+                    } else if (record == CHECKPOINT_RECORD) { // skip checkpoint bytes
+                        int num = this.raf.readInt();
+                        while (num-- > 0) {
+                            this.raf.skipBytes(LONG_SIZE * 2);
+                        }
+                    }
+                    this.raf.skipBytes(LONG_SIZE);
+                }
+
+                // do REDO from the earliest transaction recorded.
+                this.raf.seek(earliestActiveTxn);
+                while (this.raf.getFilePointer() < this.raf.length()) {
+                    int record = this.raf.readInt();
+                    long tid = this.raf.readLong();
+                    if (record == UPDATE_RECORD) {
+                        Page beforePageData = readPageData(this.raf);
+                        Page afterPageData = readPageData(this.raf);
+                        HeapFile file = (HeapFile) Database.getCatalog().getDatabaseFile(beforePageData.getId().getTableId());
+                        if (committedTxn.contains(tid)) {
+                            file.writePage(afterPageData);
+                        } else {
+                            file.writePage(beforePageData);
+                        }
+                    } else if (record == CHECKPOINT_RECORD) {
+                        int num = this.raf.readInt();
+                        while (num-- > 0) {
+                            this.raf.skipBytes(LONG_SIZE * 2);
+                        }
+                    }
+                    this.raf.skipBytes(LONG_SIZE);
+                }
             }
          }
     }

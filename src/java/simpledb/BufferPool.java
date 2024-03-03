@@ -138,10 +138,8 @@ public class BufferPool {
         throws IOException {
         // some code goes here
         if (commit) {
-            // flush all dirty pages to disk.
-            flushPages(tid);
+            logPages(tid);
         } else { // ABORT
-            // reset all pages to beforeImage
             resetPages(tid);
         }
         this.lockManager.releaseLocks(tid);
@@ -205,8 +203,8 @@ public class BufferPool {
      */
     public synchronized void flushAllPages() throws IOException {
         // some code goes here
-        for (Page page : this.pageMap.values())
-            flushPage(page.getId());
+        for (PageId pageId : this.pageMap.keySet())
+            flushPage(pageId);
     }
 
     private synchronized void discardPages(TransactionId tid) {
@@ -226,12 +224,8 @@ public class BufferPool {
     */
     public synchronized void discardPage(PageId pid) {
         // some code goes here
-        Page page = this.pageMap.get(pid);
-        TransactionId lastTouchedId = page.isDirty();
-        // only discard pages that have been written to.
-        if (lastTouchedId != null) {
-            this.pageMap.remove(pid);
-        }
+        if (!this.pageMap.containsKey(pid)) return;
+        this.pageMap.remove(pid);
     }
 
     /**
@@ -244,10 +238,11 @@ public class BufferPool {
         TransactionId lastTouchedId = page.isDirty();
         // check to see if page is dirty, only write pages that are
         if (lastTouchedId != null) {
+            Database.getLogFile().logWrite(lastTouchedId, page.getBeforeImage(), page);
+            Database.getLogFile().force();
             HeapFile file = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
             file.writePage(page);
             page.markDirty(false, null);
-            page.setBeforeImage();
         }
     }
 
@@ -270,15 +265,19 @@ public class BufferPool {
      */
     private synchronized void evictPage() throws DbException {
         // some code goes here
+        for (Map.Entry<PageId, Page> entry : this.pageMap.entrySet()) {
+            this.pageMap.remove(entry.getKey());
+            return;
+        }
 
         // find the first non-dirty page.
-        for (Map.Entry<PageId, Page> entry : this.pageMap.entrySet()) {
-            if (entry.getValue().isDirty() == null) {
-                this.pageMap.remove(entry.getKey());
-                return;
-            }
-        }
-         throw new DbException("Cannot evict dirty page!");
+//        for (Map.Entry<PageId, Page> entry : this.pageMap.entrySet()) {
+//            if (entry.getValue().isDirty() == null) {
+//                this.pageMap.remove(entry.getKey());
+//                return;
+//            }
+//        }
+//         throw new DbException("Cannot evict dirty page!");
     }
 
     ///////////////////////////////////////////////////////////////
@@ -291,11 +290,31 @@ public class BufferPool {
 
     private synchronized void resetPages(TransactionId tid) {
         Set<PageId> pageList = this.lockManager.getTransactionPageList(tid);
-        if (pageList == null) return;
+        for (PageId pid : pageList) {
+            HeapFile file = (HeapFile) Database.getCatalog().getDatabaseFile(pid.getTableId());
+            Page page = file.readPage(pid);
+            page.markDirty(false, tid);
+            this.pageMap.put(pid, page);
+        }
+    }
+
+    /**
+     * Logs all changes a Transaction upon a Commit statement. This allows SimpleDB to have a NO_FORCE policy.
+     * @param tid TransactionId for transaction doing a commit.
+     * @throws IOException
+     */
+    private synchronized void logPages(TransactionId tid) throws IOException {
+        Set<PageId> pageList = this.lockManager.getTransactionPageList(tid);
         for (PageId pid : pageList) {
             if (this.pageMap.containsKey(pid)) {
-                Page dirtyPage = this.pageMap.get(pid);
-                this.pageMap.put(pid, dirtyPage.getBeforeImage());
+                Page page = this.pageMap.get(pid);
+                TransactionId dirtier = page.isDirty();
+
+                if (dirtier != null) {
+                    Database.getLogFile().logWrite(dirtier, page.getBeforeImage(), page);
+                    Database.getLogFile().force();
+                }
+                page.setBeforeImage();
             }
         }
     }
