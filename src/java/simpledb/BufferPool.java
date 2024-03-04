@@ -30,8 +30,6 @@ public class BufferPool {
     // Fields
     private final LockManager lockManager;
     private final int maxNumPages;
-    // Use a LinkedHashMap to maintain order of insertions
-    // if doing LFU policy we can remove the head of the list
     private final Map<PageId, Page> pageMap;
 
     /**
@@ -269,15 +267,6 @@ public class BufferPool {
             this.pageMap.remove(entry.getKey());
             return;
         }
-
-        // find the first non-dirty page.
-//        for (Map.Entry<PageId, Page> entry : this.pageMap.entrySet()) {
-//            if (entry.getValue().isDirty() == null) {
-//                this.pageMap.remove(entry.getKey());
-//                return;
-//            }
-//        }
-//         throw new DbException("Cannot evict dirty page!");
     }
 
     ///////////////////////////////////////////////////////////////
