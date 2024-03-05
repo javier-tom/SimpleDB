@@ -1,0 +1,15 @@
+Feedback for: jtomas21
+--------------------------------------------------------------
+Total Score (%): 100
+Unit Test Score (out of 32): 15
+System Test Score (out of 4): 6
+Code Score (out of 10): 10
+Writeup Score (out of 10): 10
+--------------------------------------------------------------
+Nice job finishing the lab!
+
+Code:
+Great job commenting your code, especially LockManager!
+
+Writeup:
+Good work explaining your design decisions and implementation with detail.
